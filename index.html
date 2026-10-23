@@ -130,6 +130,7 @@ function migrate() {
 const fa = n => String(n).replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 const key = (w, s) => `${w}-${s}`;
+const compOf = s => Math.ceil(s / SEATS_PER_COMP);
 const opts = (list, cur, ph = "—") =>
   `<option value="">${ph}</option>` + list.map(v => `<option value="${esc(v)}" ${v === (cur || "") ? "selected" : ""}>${esc(v)}</option>`).join("");
 
@@ -139,7 +140,6 @@ const updateTotal = () => {
   document.getElementById("total").textContent = `ثبت‌شده: ${fa(totalDone())} از ${fa(WAGONS * TOTAL_SEATS)} صندلی`;
 };
 
-// متن خلاصه صندلی (زیر هر صندلی)
 function describe(w, s) {
   const d = data[key(w, s)];
   if (!d || !d.ok) return "";
@@ -153,7 +153,8 @@ function describe(w, s) {
   return `صندلی ${fa(s)} ـ این صندلی این شخص آمده: ${who}.`;
 }
 
-// متن بزرگ بالای هر کوپه: مثلا «مسافرین این کوپه ۲خ ۲ز می‌باشد»
+// متن بزرگ بالای هر کوپه. مقادیر تکراری فقط یک بار نوشته می‌شوند
+// مثلا برای سه صندلی با ۳خ، فقط «۳خ» نمایش داده می‌شود
 function compSummary(w, c) {
   const types = [], extras = [], cuts = [], absents = [], kidsArr = [];
   for (let i = 1; i <= SEATS_PER_COMP; i++) {
@@ -166,7 +167,14 @@ function compSummary(w, c) {
     if (d.absent) absents.push(d.absent);
     if (d.kids)   kidsArr.push(d.kids);
   }
-  const all = [...types, ...cuts, ...extras, ...absents.map(a => a), ...kidsArr.map(k => `خانواده: ${k}`)];
+  const uniq = arr => [...new Set(arr)];
+  const all = [
+    ...uniq(types),
+    ...uniq(cuts),
+    ...uniq(extras),
+    ...uniq(absents),
+    ...uniq(kidsArr).map(k => `خانواده: ${k}`)
+  ];
   if (!all.length) return "";
   return `مسافرین این کوپه ${all.join(" ، ")} می‌باشد`;
 }
@@ -209,7 +217,6 @@ function render() {
   renderPanel();
 }
 
-// به‌روزرسانی یک صندلی و متن بزرگ کوپه‌اش
 function refreshSeat(w, s) {
   const box = document.querySelector(`.seat-box[data-w="${w}"][data-s="${s}"]`);
   if (!box) return;
@@ -223,7 +230,6 @@ function refreshSeat(w, s) {
   document.getElementById(`cnt-${w}`).textContent = `${fa(countDone(w))} / ${fa(TOTAL_SEATS)}`;
   updateTotal();
 }
-const compOf = s => Math.ceil(s / SEATS_PER_COMP);
 
 function renderPanel() {
   const panel = document.getElementById("panel");
