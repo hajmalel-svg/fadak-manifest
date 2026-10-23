@@ -21,10 +21,11 @@
   .wagon summary { padding: 12px; font-weight: bold; cursor: pointer; display: flex; justify-content: space-between; background: #fafbfd; }
   .comp { border-top: 1px solid #eee; padding: 10px; }
   .comp-title { font-weight: bold; margin-bottom: 6px; }
+  .comp-desc { font-size: 17px; font-weight: bold; color: #1f4fb3; background: #eef4ff; border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; min-height: 20px; }
   .seat-box { border: 1px solid #e3e7ef; border-radius: 8px; padding: 8px; margin-bottom: 6px; }
   .seat-box.done { background: #e8f7ec; }
   .seat-head { display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
-  .summary-line { font-size: 12px; background: #eef6ff; border-radius: 6px; padding: 6px 8px; color: #234; margin-top: 6px; }
+  .summary-line { font-size: 12px; background: #f5f7fb; border-radius: 6px; padding: 6px 8px; color: #234; margin-top: 6px; }
   .daily-add, .opt-add { display: flex; gap: 6px; margin-bottom: 10px; }
   .daily-add input, .opt-add input { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #bbb; font-family: inherit; }
   .daily-add button, .opt-add button { padding: 8px 14px; background: #2d6cdf; color: #fff; border: 0; border-radius: 8px; font-family: inherit; cursor: pointer; }
@@ -110,13 +111,12 @@ const KEY = "fadak_manifest_v2", DKEY = "fadak_daily_v1", OKEY = "fadak_options_
 let data    = JSON.parse(localStorage.getItem(KEY) || "null") || migrate();
 let daily   = JSON.parse(localStorage.getItem(DKEY) || "[]");
 let options = JSON.parse(localStorage.getItem(OKEY) || "null") || JSON.parse(JSON.stringify(DEFAULTS));
-let sel = new Set(); // صندلی‌های تیک‌خورده در پنل فعلی (موقت)
+let sel = new Set();
 
 const save      = () => localStorage.setItem(KEY, JSON.stringify(data));
 const saveDaily = () => localStorage.setItem(DKEY, JSON.stringify(daily));
 const saveOpts  = () => localStorage.setItem(OKEY, JSON.stringify(options));
 
-// انتقال داده‌های نسخه قبلی (سطح کوپه) به صندلی ۱ هر کوپه
 function migrate() {
   const old = JSON.parse(localStorage.getItem("fadak_manifest_v1") || "{}");
   const out = {};
@@ -130,7 +130,6 @@ function migrate() {
 const fa = n => String(n).replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 const key = (w, s) => `${w}-${s}`;
-const compOf = s => Math.ceil(s / SEATS_PER_COMP);
 const opts = (list, cur, ph = "—") =>
   `<option value="">${ph}</option>` + list.map(v => `<option value="${esc(v)}" ${v === (cur || "") ? "selected" : ""}>${esc(v)}</option>`).join("");
 
@@ -140,6 +139,7 @@ const updateTotal = () => {
   document.getElementById("total").textContent = `ثبت‌شده: ${fa(totalDone())} از ${fa(WAGONS * TOTAL_SEATS)} صندلی`;
 };
 
+// متن خلاصه صندلی (زیر هر صندلی)
 function describe(w, s) {
   const d = data[key(w, s)];
   if (!d || !d.ok) return "";
@@ -151,6 +151,24 @@ function describe(w, s) {
   if (d.kids)   parts.push(`در خانواده: ${d.kids}`);
   const who = parts.length ? parts.join("، ") : "اطلاعات خاصی ثبت نشده";
   return `صندلی ${fa(s)} ـ این صندلی این شخص آمده: ${who}.`;
+}
+
+// متن بزرگ بالای هر کوپه: مثلا «مسافرین این کوپه ۲خ ۲ز می‌باشد»
+function compSummary(w, c) {
+  const types = [], extras = [], cuts = [], absents = [], kidsArr = [];
+  for (let i = 1; i <= SEATS_PER_COMP; i++) {
+    const s = (c - 1) * SEATS_PER_COMP + i;
+    const d = data[key(w, s)];
+    if (!d || !d.ok) continue;
+    if (d.type)   types.push(d.type);
+    if (d.extra)  extras.push(d.extra);
+    if (d.cut)    cuts.push(d.cut);
+    if (d.absent) absents.push(d.absent);
+    if (d.kids)   kidsArr.push(d.kids);
+  }
+  const all = [...types, ...cuts, ...extras, ...absents.map(a => a), ...kidsArr.map(k => `خانواده: ${k}`)];
+  if (!all.length) return "";
+  return `مسافرین این کوپه ${all.join(" ، ")} می‌باشد`;
 }
 
 function seatBox(w, s) {
@@ -172,7 +190,9 @@ function render() {
     for (let c = 1; c <= COMPS; c++) {
       const seats = [];
       for (let i = 1; i <= SEATS_PER_COMP; i++) seats.push((c - 1) * SEATS_PER_COMP + i);
-      comps += `<div class="comp"><div class="comp-title">کوپه ${fa(c)}</div>` +
+      comps += `<div class="comp" data-cw="${w}" data-cc="${c}">
+        <div class="comp-title">کوپه ${fa(c)}</div>
+        <div class="comp-desc" id="cdesc-${w}-${c}">${esc(compSummary(w, c))}</div>` +
         seats.map(s => seatBox(w, s)).join("") + `</div>`;
     }
     html += `
@@ -189,6 +209,7 @@ function render() {
   renderPanel();
 }
 
+// به‌روزرسانی یک صندلی و متن بزرگ کوپه‌اش
 function refreshSeat(w, s) {
   const box = document.querySelector(`.seat-box[data-w="${w}"][data-s="${s}"]`);
   if (!box) return;
@@ -197,11 +218,13 @@ function refreshSeat(w, s) {
   const line = document.getElementById(`sum-${w}-${s}`);
   line.textContent = describe(w, s);
   line.classList.toggle("hidden", !(d.ok && describe(w, s)));
+  const c = compOf(s);
+  document.getElementById(`cdesc-${w}-${c}`).textContent = compSummary(w, c);
   document.getElementById(`cnt-${w}`).textContent = `${fa(countDone(w))} / ${fa(TOTAL_SEATS)}`;
   updateTotal();
 }
+const compOf = s => Math.ceil(s / SEATS_PER_COMP);
 
-// پنل مشترک: یک بار نمایش، روی همه صندلی‌های تیک‌خورده اعمال می‌شود
 function renderPanel() {
   const panel = document.getElementById("panel");
   if (sel.size === 0) { panel.classList.add("hidden"); return; }
@@ -209,13 +232,12 @@ function renderPanel() {
   const list = [...sel].map(k => { const [w, s] = k.split("-"); return `سالن ${fa(w)} صندلی ${fa(s)}`; });
   document.getElementById("panelTitle").textContent = `${fa(sel.size)} صندلی انتخاب شده`;
   document.getElementById("panelList").textContent = list.join("، ");
-  document.querySelectorAll("#panel select").forEach(sel2 => {
-    const f = sel2.dataset.pf;
-    sel2.innerHTML = opts(options[f], "", f === "kids" ? "بدون" : "—");
+  document.querySelectorAll("#panel select").forEach(el => {
+    const f = el.dataset.pf;
+    el.innerHTML = opts(options[f], "", f === "kids" ? "بدون" : "—");
   });
 }
 
-// تیک صندلی‌ها
 document.getElementById("wagons").addEventListener("change", e => {
   if (!e.target.classList.contains("pick")) return;
   const box = e.target.closest(".seat-box");
@@ -228,11 +250,11 @@ document.getElementById("wagons").addEventListener("change", e => {
   renderPanel();
 });
 
-// اعمال گزینه انتخابی روی همه صندلی‌های تیک‌خورده
 document.getElementById("panel").addEventListener("change", e => {
   const f = e.target.dataset.pf;
   if (!f) return;
   const v = e.target.value;
+  if (!v) return;
   const keys = [...sel];
   for (const k of keys) {
     data[k] = data[k] || {};
@@ -247,8 +269,9 @@ document.getElementById("closePanel").onclick = () => { sel.clear(); renderPanel
 
 document.getElementById("copyBtn").onclick = async () => {
   const lines = [];
-  for (let w = 1; w <= WAGONS; w++) for (let s = 1; s <= TOTAL_SEATS; s++) {
-    if (data[key(w, s)]?.ok) lines.push(`سالن ${fa(w)} ${describe(w, s)}`);
+  for (let w = 1; w <= WAGONS; w++) for (let c = 1; c <= COMPS; c++) {
+    const t = compSummary(w, c);
+    if (t) lines.push(`سالن ${fa(w)} کوپه ${fa(c)}: ${t}`);
   }
   const text = "مانیفست فدک\n" + lines.join("\n");
   try { await navigator.clipboard.writeText(text); alert("کپی شد"); }
@@ -259,7 +282,6 @@ document.getElementById("resetBtn").onclick = () => {
   if (confirm("همه اطلاعات ثبت‌شده پاک شود؟")) { data = {}; sel.clear(); save(); render(); }
 };
 
-// ===== تنظیمات گزینه‌ها =====
 function renderSettings() {
   document.getElementById("optGroups").innerHTML = FIELDS.map(k => `
     <div class="opt-group">
@@ -312,7 +334,6 @@ document.getElementById("tabM").onclick = () => showTab("manifest");
 document.getElementById("tabD").onclick = () => showTab("daily");
 document.getElementById("tabS").onclick = () => { renderSettings(); showTab("settings"); };
 
-// ===== چک‌لیست روزانه =====
 function renderDaily() {
   document.getElementById("tasks").innerHTML = daily.map((t, i) => `
     <div class="task ${t.done ? "done" : ""}">
