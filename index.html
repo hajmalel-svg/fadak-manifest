@@ -90,7 +90,7 @@
 </section>
 
 <section id="settings" class="hidden">
-  <p class="note">گزینه‌های جدید را اینجا اضافه، ویرایش یا حذف کنید. تغییرات بلافاصله در پنل صندلی‌ها اعمال می‌شود.</p>
+  <p class="note">گزینه‌های جدید را اینجا اضافه، ویرایش یا حذف کنید.</p>
   <div id="optGroups"></div>
 </section>
 
@@ -153,28 +153,22 @@ function describe(w, s) {
   return `صندلی ${fa(s)} ـ این صندلی این شخص آمده: ${who}.`;
 }
 
-// متن بزرگ بالای هر کوپه. مقادیر تکراری فقط یک بار نوشته می‌شوند
-// مثلا برای سه صندلی با ۳خ، فقط «۳خ» نمایش داده می‌شود
+// متن بزرگ بالای کوپه: از همه صندلی‌های تیک‌خورده ساخته می‌شود
+// هر مقدار تکراری یک بار نوشته می‌شود و ترکیب‌ها (مثل ۳خ ۱م) کنار هم می‌آیند
 function compSummary(w, c) {
-  const types = [], extras = [], cuts = [], absents = [], kidsArr = [];
+  const types = [], cuts = [], extras = [], absents = [], kidsArr = [];
   for (let i = 1; i <= SEATS_PER_COMP; i++) {
     const s = (c - 1) * SEATS_PER_COMP + i;
     const d = data[key(w, s)];
     if (!d || !d.ok) continue;
     if (d.type)   types.push(d.type);
-    if (d.extra)  extras.push(d.extra);
     if (d.cut)    cuts.push(d.cut);
+    if (d.extra)  extras.push(d.extra);
     if (d.absent) absents.push(d.absent);
-    if (d.kids)   kidsArr.push(d.kids);
+    if (d.kids)   kidsArr.push(`خانواده: ${d.kids}`);
   }
   const uniq = arr => [...new Set(arr)];
-  const all = [
-    ...uniq(types),
-    ...uniq(cuts),
-    ...uniq(extras),
-    ...uniq(absents),
-    ...uniq(kidsArr).map(k => `خانواده: ${k}`)
-  ];
+  const all = [...uniq(types), ...uniq(cuts), ...uniq(extras), ...uniq(absents), ...uniq(kidsArr)];
   if (!all.length) return "";
   return `مسافرین این کوپه ${all.join(" ، ")} می‌باشد`;
 }
