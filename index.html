@@ -12,7 +12,9 @@
   .tabs button { padding: 8px 14px; border: 0; border-radius: 8px; background: #d9dee8; cursor: pointer; font-family: inherit; }
   .tabs button.active { background: #2d6cdf; color: #fff; }
   .toolbar { display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
-  .toolbar button { padding: 6px 12px; border: 1px solid #2d6cdf; background: #fff; color: #2d6cdf; border-radius: 8px; cursor: pointer; font-family: inherit; }
+  .toolbar button, .btn { padding: 6px 12px; border: 1px solid #2d6cdf; background: #fff; color: #2d6cdf; border-radius: 8px; cursor: pointer; font-family: inherit; }
+  .btn.primary { background: #2d6cdf; color: #fff; }
+  .btn.danger { border-color: #c33; color: #c33; }
   .wagon { background: #fff; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 1px 3px #0002; overflow: hidden; }
   .wagon summary { padding: 12px; font-weight: bold; cursor: pointer; display: flex; justify-content: space-between; background: #fafbfd; }
   .comp { border-top: 1px solid #eee; padding: 10px; display: grid; gap: 6px; }
@@ -23,14 +25,22 @@
   .row { display: flex; gap: 6px; flex-wrap: wrap; }
   .row label { display: flex; flex-direction: column; font-size: 11px; color: #555; }
   select { padding: 5px; border-radius: 6px; border: 1px solid #bbb; font-family: inherit; font-size: 13px; max-width: 100%; }
-  .daily-add { display: flex; gap: 6px; margin-bottom: 10px; }
-  .daily-add input { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #bbb; font-family: inherit; }
-  .daily-add button { padding: 8px 14px; background: #2d6cdf; color: #fff; border: 0; border-radius: 8px; font-family: inherit; cursor: pointer; }
+  .summary-line { font-size: 13px; background: #eef6ff; border-radius: 6px; padding: 6px 8px; color: #234; }
+  .daily-add, .opt-add { display: flex; gap: 6px; margin-bottom: 10px; }
+  .daily-add input, .opt-add input { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #bbb; font-family: inherit; }
+  .daily-add button, .opt-add button { padding: 8px 14px; background: #2d6cdf; color: #fff; border: 0; border-radius: 8px; font-family: inherit; cursor: pointer; }
   .task { background: #fff; border-radius: 8px; padding: 10px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
   .task span { flex: 1; }
   .task.done span { text-decoration: line-through; color: #999; }
   .task button { border: 0; background: none; color: #c33; font-size: 18px; cursor: pointer; }
+  .opt-group { background: #fff; border-radius: 10px; padding: 10px; margin-bottom: 10px; box-shadow: 0 1px 3px #0002; }
+  .opt-group h3 { margin: 0 0 8px; font-size: 15px; }
+  .opt-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #eee; }
+  .opt-item span { flex: 1; }
+  .opt-item button { border: 0; background: none; color: #2d6cdf; cursor: pointer; font-family: inherit; }
+  .opt-item button.del { color: #c33; font-size: 16px; }
   .hidden { display: none; }
+  .note { font-size: 12px; color: #666; margin: 4px 0 10px; }
 </style>
 </head>
 <body>
@@ -40,13 +50,14 @@
 <div class="tabs">
   <button id="tabM" class="active">ثبت حضور</button>
   <button id="tabD">چک‌لیست روزانه</button>
+  <button id="tabS">تنظیمات</button>
 </div>
 
 <section id="manifest">
   <div class="toolbar">
+    <button id="copyBtn" class="btn">کپی خلاصه</button>
+    <button id="resetBtn" class="btn danger">پاک کردن همه</button>
     <span id="total"></span>
-    <button id="copyBtn">کپی خلاصه</button>
-    <button id="resetBtn">پاک کردن همه</button>
   </div>
   <div id="wagons"></div>
 </section>
@@ -59,39 +70,59 @@
   <div id="tasks"></div>
 </section>
 
+<section id="settings" class="hidden">
+  <p class="note">گزینه‌های جدید را اینجا اضافه، ویرایش یا حذف کنید. تغییرات بلافاصله در کوپه‌ها اعمال می‌شود.</p>
+  <div id="optGroups"></div>
+</section>
+
 <script>
-// ===== تنظیمات (هر وقت خواستید می‌توانید این لیست‌ها را تغییر دهید) =====
+// ===== گزینه‌های پیش‌فرض (فقط بار اول استفاده می‌شوند) =====
+const DEFAULTS = {
+  type:   ["۴خ","۳خ","۲خ","۱خ","۴م","۳م","۲م","۱م","۴ز","۳ز","۲ز","۱ز","۳ز ۱م","۱م ۳ز","۲خ ۲خ","۲خ ۲م","۳خ ۱م","۲ز ۲م"],
+  cut:    ["کسر کوپه ۱","کسر کوپه ۲","کسر کوپه ۳"],
+  extra:  ["۱ خردسال","۲ خردسال","۳ خردسال","۴ خردسال","۵ خردسال","۱ طفل","۲ طفل","۳ طفل","۴ طفل","۵ طفل"],
+  absent: ["۱م نیامده","۲م نیامده","۳م نیامده","۴م نیامده","۱ز نیامده","۲ز نیامده","۳ز نیامده","۴ز نیامده","۲خ نیامده","۳خ نیامده","۴خ نیامده"],
+  kids:   ["۱ نفر","۲ نفر","۳ نفر","۴ نفر"]
+};
+const LABELS = { type: "نوع مسافر", cut: "کسر کوپه", extra: "نفر اضافه", absent: "نیامده", kids: "خردسال/طفل در خانواده" };
 const WAGONS = 11, COMPS = 11;
-const TYPES  = ["", "۴خ","۳خ","۲خ","۱خ","۴م","۳م","۲م","۱م","۴ز","۳ز","۲ز","۱ز",
-                "۳ز ۱م","۱م ۳ز","۲خ ۲خ","۲خ ۲م","۳خ ۱م","۲ز ۲م"];
-const CUT    = ["", "کسر کوپه ۱", "کسر کوپه ۲", "کسر کوپه ۳"];
-const EXTRA  = ["", "۱ خردسال","۲ خردسال","۳ خردسال","۴ خردسال","۵ خردسال",
-                    "۱ طفل","۲ طفل","۳ طفل","۴ طفل","۵ طفل"];
-const ABSENT = ["", "۱م نیامده","۲م نیامده","۳م نیامده","۴م نیامده",
-                    "۱ز نیامده","۲ز نیامده","۳ز نیامده","۴ز نیامده",
-                    "۲خ نیامده","۳خ نیامده","۴خ نیامده"];
-const KIDS   = ["", "۱ نفر","۲ نفر","۳ نفر","۴ نفر"];
 
 // ===== ذخیره‌سازی =====
-const KEY = "fadak_manifest_v1", DKEY = "fadak_daily_v1";
-let data  = JSON.parse(localStorage.getItem(KEY)  || "{}");
-let daily = JSON.parse(localStorage.getItem(DKEY) || "[]");
+const KEY = "fadak_manifest_v1", DKEY = "fadak_daily_v1", OKEY = "fadak_options_v1";
+let data    = JSON.parse(localStorage.getItem(KEY)  || "{}");
+let daily   = JSON.parse(localStorage.getItem(DKEY) || "[]");
+let options = JSON.parse(localStorage.getItem(OKEY) || "null") || JSON.parse(JSON.stringify(DEFAULTS));
 const save      = () => localStorage.setItem(KEY, JSON.stringify(data));
 const saveDaily = () => localStorage.setItem(DKEY, JSON.stringify(daily));
+const saveOpts  = () => localStorage.setItem(OKEY, JSON.stringify(options));
 
 // ===== ابزارها =====
 const fa = n => String(n).replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
 const seatsOf = c => [1,2,3,4].map(i => (c - 1) * 4 + i);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 const opts = (list, cur, ph = "—") =>
-  list.map(v => `<option value="${v}" ${v === (cur || "") ? "selected" : ""}>${v || ph}</option>`).join("");
-const esc = s => s.replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+  `<option value="">${ph}</option>` + list.map(v => `<option value="${esc(v)}" ${v === (cur || "") ? "selected" : ""}>${esc(v)}</option>`).join("");
 const countDone = w => { let n = 0; for (let c = 1; c <= COMPS; c++) if (data[`${w}-${c}`]?.ok) n++; return n; };
 const totalDone = () => { let n = 0; for (let w = 1; w <= WAGONS; w++) n += countDone(w); return n; };
 const updateTotal = () => {
   document.getElementById("total").textContent = `ثبت‌شده: ${fa(totalDone())} از ${fa(WAGONS * COMPS)} کوپه`;
 };
 
-// ===== رندر لیست سالن‌ها =====
+// ===== توضیح خودکار هر کوپه =====
+function describe(w, c) {
+  const d = data[`${w}-${c}`];
+  if (!d || !d.ok) return "";
+  const parts = [];
+  if (d.type)   parts.push(`نوع: ${d.type}`);
+  if (d.cut)    parts.push(d.cut);
+  if (d.extra)  parts.push(`نفر اضافه: ${d.extra}`);
+  if (d.absent) parts.push(`${d.absent}`);
+  if (d.kids)   parts.push(`در خانواده: ${d.kids}`);
+  const who = parts.length ? parts.join("، ") : "اطلاعات خاصی ثبت نشده";
+  return `کوپه ${fa(c)} ـ این کوپه این اشخاص آمده: ${who}.`;
+}
+
+// ===== رندر ثبت حضور =====
 function render() {
   let html = "";
   for (let w = 1; w <= WAGONS; w++) {
@@ -106,12 +137,13 @@ function render() {
         </div>
         <div class="seats">صندلی: ${seatsOf(c).map(s => `<span class="seat">${fa(s)}</span>`).join("")}</div>
         <div class="row">
-          <label>نوع مسافر<select data-f="type">${opts(TYPES, d.type)}</select></label>
-          <label>کسر کوپه<select data-f="cut">${opts(CUT, d.cut)}</select></label>
-          <label>نفر اضافه<select data-f="extra">${opts(EXTRA, d.extra)}</select></label>
-          <label>نیامده<select data-f="absent">${opts(ABSENT, d.absent)}</select></label>
-          <label>خردسال/طفل در خانواده<select data-f="kids">${opts(KIDS, d.kids, "بدون")}</select></label>
+          <label>نوع مسافر<select data-f="type">${opts(options.type, d.type)}</select></label>
+          <label>کسر کوپه<select data-f="cut">${opts(options.cut, d.cut)}</select></label>
+          <label>نفر اضافه<select data-f="extra">${opts(options.extra, d.extra)}</select></label>
+          <label>نیامده<select data-f="absent">${opts(options.absent, d.absent)}</select></label>
+          <label>خردسال/طفل در خانواده<select data-f="kids">${opts(options.kids, d.kids, "بدون")}</select></label>
         </div>
+        <div class="summary-line" id="sum-${w}-${c}" ${d.ok ? "" : "hidden"}>${esc(describe(w, c))}</div>
       </div>`;
     }
     html += `
@@ -127,16 +159,27 @@ function render() {
   updateTotal();
 }
 
-// ثبت تغییرات (با event delegation تا لیست بسته نشود)
+function refreshCompartment(w, c) {
+  const card = document.querySelector(`.comp[data-w="${w}"][data-c="${c}"]`);
+  if (!card) return;
+  const d = data[`${w}-${c}`] || {};
+  card.classList.toggle("done", !!d.ok);
+  const line = document.getElementById(`sum-${w}-${c}`);
+  line.textContent = describe(w, c);
+  line.hidden = !d.ok;
+}
+
+// ثبت تغییرات کوپه‌ها
 document.getElementById("wagons").addEventListener("change", e => {
   const card = e.target.closest(".comp");
   if (!card) return;
   const w = card.dataset.w, c = card.dataset.c, key = `${w}-${c}`;
   const f = e.target.dataset.f;
+  if (!f) return;
   data[key] = data[key] || {};
   data[key][f] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
-  if (f === "ok") card.classList.toggle("done", e.target.checked);
   save();
+  refreshCompartment(w, c);
   document.getElementById(`cnt-${w}`).textContent = `${fa(countDone(w))} / ${fa(COMPS)}`;
   updateTotal();
 });
@@ -147,9 +190,8 @@ document.getElementById("copyBtn").onclick = async () => {
   for (let w = 1; w <= WAGONS; w++) for (let c = 1; c <= COMPS; c++) {
     const d = data[`${w}-${c}`];
     if (!d) continue;
-    const parts = [d.type, d.cut, d.extra, d.absent, d.kids && `خردسال: ${d.kids}`].filter(Boolean);
-    if (parts.length || d.ok)
-      lines.push(`سالن ${fa(w)} کوپه ${fa(c)}: ${parts.join(" | ") || "خالی"}${d.ok ? " ✓" : ""}`);
+    const text = describe(w, c);
+    if (d.ok) lines.push(`سالن ${fa(w)} ${text}`);
   }
   const text = "مانیفست فدک\n" + lines.join("\n");
   try { await navigator.clipboard.writeText(text); alert("کپی شد"); }
@@ -161,15 +203,61 @@ document.getElementById("resetBtn").onclick = () => {
   if (confirm("همه اطلاعات ثبت‌شده پاک شود؟")) { data = {}; save(); render(); }
 };
 
-// ===== تب‌ها =====
-function showTab(isManifest) {
-  document.getElementById("manifest").classList.toggle("hidden", !isManifest);
-  document.getElementById("daily").classList.toggle("hidden", isManifest);
-  document.getElementById("tabM").classList.toggle("active", isManifest);
-  document.getElementById("tabD").classList.toggle("active", !isManifest);
+// ===== تنظیمات گزینه‌ها =====
+function renderSettings() {
+  document.getElementById("optGroups").innerHTML = Object.keys(LABELS).map(k => `
+    <div class="opt-group">
+      <h3>${LABELS[k]}</h3>
+      <div class="opt-add">
+        <input data-add="${k}" placeholder="گزینه جدید...">
+        <button data-addbtn="${k}">افزودن</button>
+      </div>
+      ${options[k].map((v, i) => `
+        <div class="opt-item">
+          <span>${esc(v) || "(خالی)"}</span>
+          <button data-edit="${k}" data-i="${i}">ویرایش</button>
+          <button class="del" data-del="${k}" data-i="${i}">×</button>
+        </div>`).join("")}
+    </div>`).join("");
 }
-document.getElementById("tabM").onclick = () => showTab(true);
-document.getElementById("tabD").onclick = () => showTab(false);
+
+document.getElementById("optGroups").addEventListener("click", e => {
+  const t = e.target;
+  if (t.dataset.addbtn) {
+    const k = t.dataset.addbtn;
+    const inp = document.querySelector(`input[data-add="${k}"]`);
+    const v = inp.value.trim();
+    if (!v) return;
+    if (options[k].includes(v)) { alert("این گزینه قبلاً وجود دارد"); return; }
+    options[k].push(v);
+    saveOpts(); renderSettings(); render();
+  } else if (t.dataset.del !== undefined) {
+    const k = t.dataset.del, i = +t.dataset.i;
+    if (confirm(`«${options[k][i]}» حذف شود؟`)) {
+      options[k].splice(i, 1);
+      saveOpts(); renderSettings(); render();
+    }
+  } else if (t.dataset.edit !== undefined) {
+    const k = t.dataset.edit, i = +t.dataset.i;
+    const nv = prompt("ویرایش گزینه:", options[k][i]);
+    if (nv !== null && nv.trim()) {
+      options[k][i] = nv.trim();
+      saveOpts(); renderSettings(); render();
+    }
+  }
+});
+
+// ===== تب‌ها =====
+function showTab(name) {
+  const map = { manifest: "manifest", daily: "daily", settings: "settings" };
+  for (const k in map) document.getElementById(map[k]).classList.toggle("hidden", k !== name);
+  document.getElementById("tabM").classList.toggle("active", name === "manifest");
+  document.getElementById("tabD").classList.toggle("active", name === "daily");
+  document.getElementById("tabS").classList.toggle("active", name === "settings");
+}
+document.getElementById("tabM").onclick = () => showTab("manifest");
+document.getElementById("tabD").onclick = () => showTab("daily");
+document.getElementById("tabS").onclick = () => { renderSettings(); showTab("settings"); };
 
 // ===== چک‌لیست روزانه =====
 function renderDaily() {
