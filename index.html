@@ -14,16 +14,16 @@
   .toolbar { display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
   .btn { padding: 6px 12px; border: 1px solid #2d6cdf; background: #fff; color: #2d6cdf; border-radius: 8px; cursor: pointer; font-family: inherit; }
   .btn.danger { border-color: #c33; color: #c33; }
+  .panel { position: sticky; top: 0; z-index: 5; background: #fff; border: 2px solid #2d6cdf; border-radius: 10px; padding: 10px; margin-bottom: 10px; box-shadow: 0 2px 6px #0003; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-bottom: 6px; gap: 6px; }
+  .panel-list { font-size: 12px; color: #444; margin-bottom: 6px; }
   .wagon { background: #fff; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 1px 3px #0002; overflow: hidden; }
   .wagon summary { padding: 12px; font-weight: bold; cursor: pointer; display: flex; justify-content: space-between; background: #fafbfd; }
   .comp { border-top: 1px solid #eee; padding: 10px; }
   .comp-title { font-weight: bold; margin-bottom: 6px; }
-  .seat-box { border: 1px solid #e3e7ef; border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+  .seat-box { border: 1px solid #e3e7ef; border-radius: 8px; padding: 8px; margin-bottom: 6px; }
   .seat-box.done { background: #e8f7ec; }
   .seat-head { display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
-  .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-  .row label { display: flex; flex-direction: column; font-size: 11px; color: #555; }
-  select { padding: 5px; border-radius: 6px; border: 1px solid #bbb; font-family: inherit; font-size: 13px; max-width: 100%; }
   .summary-line { font-size: 12px; background: #eef6ff; border-radius: 6px; padding: 6px 8px; color: #234; margin-top: 6px; }
   .daily-add, .opt-add { display: flex; gap: 6px; margin-bottom: 10px; }
   .daily-add input, .opt-add input { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #bbb; font-family: inherit; }
@@ -38,7 +38,10 @@
   .opt-item span { flex: 1; }
   .opt-item button { border: 0; background: none; color: #2d6cdf; cursor: pointer; font-family: inherit; }
   .opt-item button.del { color: #c33; font-size: 16px; }
-  .hidden { display: none; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .row label { display: flex; flex-direction: column; font-size: 11px; color: #555; }
+  select { padding: 5px; border-radius: 6px; border: 1px solid #bbb; font-family: inherit; font-size: 13px; max-width: 100%; }
+  .hidden { display: none !important; }
   .note { font-size: 12px; color: #666; margin: 4px 0 10px; }
 </style>
 </head>
@@ -58,6 +61,22 @@
     <button id="resetBtn" class="btn danger">پاک کردن همه</button>
     <span id="total"></span>
   </div>
+
+  <div id="panel" class="panel hidden">
+    <div class="panel-head">
+      <span id="panelTitle"></span>
+      <button id="closePanel" class="btn">بستن پنل</button>
+    </div>
+    <div class="panel-list" id="panelList"></div>
+    <div class="row">
+      <label>نوع مسافر<select data-pf="type"></select></label>
+      <label>کسر کوپه<select data-pf="cut"></select></label>
+      <label>نفر اضافه<select data-pf="extra"></select></label>
+      <label>نیامده<select data-pf="absent"></select></label>
+      <label>خردسال/طفل<select data-pf="kids"></select></label>
+    </div>
+  </div>
+
   <div id="wagons"></div>
 </section>
 
@@ -70,7 +89,7 @@
 </section>
 
 <section id="settings" class="hidden">
-  <p class="note">گزینه‌های جدید را اینجا اضافه، ویرایش یا حذف کنید. تغییرات بلافاصله در صندلی‌ها اعمال می‌شود.</p>
+  <p class="note">گزینه‌های جدید را اینجا اضافه، ویرایش یا حذف کنید. تغییرات بلافاصله در پنل صندلی‌ها اعمال می‌شود.</p>
   <div id="optGroups"></div>
 </section>
 
@@ -84,12 +103,15 @@ const DEFAULTS = {
 };
 const LABELS = { type: "نوع مسافر", cut: "کسر کوپه", extra: "نفر اضافه", absent: "نیامده", kids: "خردسال/طفل در خانواده" };
 const FIELDS = Object.keys(LABELS);
-const WAGONS = 11, COMPS = 11;
+const WAGONS = 11, COMPS = 11, SEATS_PER_COMP = 4;
+const TOTAL_SEATS = COMPS * SEATS_PER_COMP;
 
 const KEY = "fadak_manifest_v2", DKEY = "fadak_daily_v1", OKEY = "fadak_options_v1";
 let data    = JSON.parse(localStorage.getItem(KEY) || "null") || migrate();
 let daily   = JSON.parse(localStorage.getItem(DKEY) || "[]");
 let options = JSON.parse(localStorage.getItem(OKEY) || "null") || JSON.parse(JSON.stringify(DEFAULTS));
+let sel = new Set(); // صندلی‌های تیک‌خورده در پنل فعلی (موقت)
+
 const save      = () => localStorage.setItem(KEY, JSON.stringify(data));
 const saveDaily = () => localStorage.setItem(DKEY, JSON.stringify(daily));
 const saveOpts  = () => localStorage.setItem(OKEY, JSON.stringify(options));
@@ -100,23 +122,22 @@ function migrate() {
   const out = {};
   for (const k in old) {
     const [w, c] = k.split("-");
-    const s = (+c - 1) * 4 + 1;
-    out[`${w}-${s}`] = { ...old[k] };
+    out[`${w}-${(+c - 1) * SEATS_PER_COMP + 1}`] = { ...old[k] };
   }
   return out;
 }
 
 const fa = n => String(n).replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
-const seatsOf = c => [1,2,3,4].map(i => (c - 1) * 4 + i);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+const key = (w, s) => `${w}-${s}`;
+const compOf = s => Math.ceil(s / SEATS_PER_COMP);
 const opts = (list, cur, ph = "—") =>
   `<option value="">${ph}</option>` + list.map(v => `<option value="${esc(v)}" ${v === (cur || "") ? "selected" : ""}>${esc(v)}</option>`).join("");
 
-const key = (w, s) => `${w}-${s}`;
-const countDone = w => { let n = 0; for (let s = 1; s <= WAGONS * 0 + COMPS * 4; s++) if (data[key(w, s)]?.ok) n++; return n; };
+const countDone = w => { let n = 0; for (let s = 1; s <= TOTAL_SEATS; s++) if (data[key(w, s)]?.ok) n++; return n; };
 const totalDone = () => { let n = 0; for (let w = 1; w <= WAGONS; w++) n += countDone(w); return n; };
 const updateTotal = () => {
-  document.getElementById("total").textContent = `ثبت‌شده: ${fa(totalDone())} از ${fa(WAGONS * COMPS * 4)} صندلی`;
+  document.getElementById("total").textContent = `ثبت‌شده: ${fa(totalDone())} از ${fa(WAGONS * TOTAL_SEATS)} صندلی`;
 };
 
 function describe(w, s) {
@@ -138,12 +159,9 @@ function seatBox(w, s) {
   <div class="seat-box ${d.ok ? "done" : ""}" data-w="${w}" data-s="${s}">
     <div class="seat-head">
       <span>صندلی ${fa(s)}</span>
-      <label><input type="checkbox" data-f="ok" ${d.ok ? "checked" : ""}> ثبت شد</label>
+      <label><input type="checkbox" class="pick" ${d.ok ? "checked" : ""}> ثبت</label>
     </div>
-    <div class="row">
-      ${FIELDS.map(f => `<label>${LABELS[f]}<select data-f="${f}">${opts(options[f], d[f], f === "kids" ? "بدون" : "—")}</select></label>`).join("")}
-    </div>
-    <div class="summary-line" id="sum-${w}-${s}" ${d.ok ? "" : "hidden"}>${esc(describe(w, s))}</div>
+    <div class="summary-line ${d.ok && describe(w, s) ? "" : "hidden"}" id="sum-${w}-${s}">${esc(describe(w, s))}</div>
   </div>`;
 }
 
@@ -152,20 +170,23 @@ function render() {
   for (let w = 1; w <= WAGONS; w++) {
     let comps = "";
     for (let c = 1; c <= COMPS; c++) {
+      const seats = [];
+      for (let i = 1; i <= SEATS_PER_COMP; i++) seats.push((c - 1) * SEATS_PER_COMP + i);
       comps += `<div class="comp"><div class="comp-title">کوپه ${fa(c)}</div>` +
-        seatsOf(c).map(s => seatBox(w, s)).join("") + `</div>`;
+        seats.map(s => seatBox(w, s)).join("") + `</div>`;
     }
     html += `
     <details class="wagon" ${w === 1 ? "open" : ""}>
       <summary>
         <span>سالن ${fa(w)}</span>
-        <span id="cnt-${w}">${fa(countDone(w))} / ${fa(COMPS * 4)}</span>
+        <span id="cnt-${w}">${fa(countDone(w))} / ${fa(TOTAL_SEATS)}</span>
       </summary>
       ${comps}
     </details>`;
   }
   document.getElementById("wagons").innerHTML = html;
   updateTotal();
+  renderPanel();
 }
 
 function refreshSeat(w, s) {
@@ -175,26 +196,58 @@ function refreshSeat(w, s) {
   box.classList.toggle("done", !!d.ok);
   const line = document.getElementById(`sum-${w}-${s}`);
   line.textContent = describe(w, s);
-  line.hidden = !d.ok;
+  line.classList.toggle("hidden", !(d.ok && describe(w, s)));
+  document.getElementById(`cnt-${w}`).textContent = `${fa(countDone(w))} / ${fa(TOTAL_SEATS)}`;
+  updateTotal();
 }
 
+// پنل مشترک: یک بار نمایش، روی همه صندلی‌های تیک‌خورده اعمال می‌شود
+function renderPanel() {
+  const panel = document.getElementById("panel");
+  if (sel.size === 0) { panel.classList.add("hidden"); return; }
+  panel.classList.remove("hidden");
+  const list = [...sel].map(k => { const [w, s] = k.split("-"); return `سالن ${fa(w)} صندلی ${fa(s)}`; });
+  document.getElementById("panelTitle").textContent = `${fa(sel.size)} صندلی انتخاب شده`;
+  document.getElementById("panelList").textContent = list.join("، ");
+  document.querySelectorAll("#panel select").forEach(sel2 => {
+    const f = sel2.dataset.pf;
+    sel2.innerHTML = opts(options[f], "", f === "kids" ? "بدون" : "—");
+  });
+}
+
+// تیک صندلی‌ها
 document.getElementById("wagons").addEventListener("change", e => {
+  if (!e.target.classList.contains("pick")) return;
   const box = e.target.closest(".seat-box");
-  if (!box) return;
-  const f = e.target.dataset.f;
-  if (!f) return;
   const w = box.dataset.w, s = box.dataset.s, k = key(w, s);
   data[k] = data[k] || {};
-  data[k][f] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+  data[k].ok = e.target.checked;
+  if (e.target.checked) sel.add(k); else sel.delete(k);
   save();
   refreshSeat(w, s);
-  document.getElementById(`cnt-${w}`).textContent = `${fa(countDone(w))} / ${fa(COMPS * 4)}`;
-  updateTotal();
+  renderPanel();
 });
+
+// اعمال گزینه انتخابی روی همه صندلی‌های تیک‌خورده
+document.getElementById("panel").addEventListener("change", e => {
+  const f = e.target.dataset.pf;
+  if (!f) return;
+  const v = e.target.value;
+  const keys = [...sel];
+  for (const k of keys) {
+    data[k] = data[k] || {};
+    data[k][f] = v;
+  }
+  save();
+  for (const k of keys) { const [w, s] = k.split("-"); refreshSeat(w, s); }
+  e.target.value = "";
+});
+
+document.getElementById("closePanel").onclick = () => { sel.clear(); renderPanel(); };
 
 document.getElementById("copyBtn").onclick = async () => {
   const lines = [];
-  for (let w = 1; w <= WAGONS; w++) for (let s = 1; s <= COMPS * 4; s++) {
+  for (let w = 1; w <= WAGONS; w++) for (let s = 1; s <= TOTAL_SEATS; s++) {
     if (data[key(w, s)]?.ok) lines.push(`سالن ${fa(w)} ${describe(w, s)}`);
   }
   const text = "مانیفست فدک\n" + lines.join("\n");
@@ -203,9 +256,10 @@ document.getElementById("copyBtn").onclick = async () => {
 };
 
 document.getElementById("resetBtn").onclick = () => {
-  if (confirm("همه اطلاعات ثبت‌شده پاک شود؟")) { data = {}; save(); render(); }
+  if (confirm("همه اطلاعات ثبت‌شده پاک شود؟")) { data = {}; sel.clear(); save(); render(); }
 };
 
+// ===== تنظیمات گزینه‌ها =====
 function renderSettings() {
   document.getElementById("optGroups").innerHTML = FIELDS.map(k => `
     <div class="opt-group">
@@ -231,19 +285,19 @@ document.getElementById("optGroups").addEventListener("click", e => {
     if (!v) return;
     if (options[k].includes(v)) { alert("این گزینه قبلاً وجود دارد"); return; }
     options[k].push(v);
-    saveOpts(); renderSettings(); render();
+    saveOpts(); renderSettings(); renderPanel();
   } else if (t.dataset.del !== undefined) {
     const k = t.dataset.del, i = +t.dataset.i;
     if (confirm(`«${options[k][i]}» حذف شود؟`)) {
       options[k].splice(i, 1);
-      saveOpts(); renderSettings(); render();
+      saveOpts(); renderSettings(); renderPanel();
     }
   } else if (t.dataset.edit !== undefined) {
     const k = t.dataset.edit, i = +t.dataset.i;
     const nv = prompt("ویرایش گزینه:", options[k][i]);
     if (nv !== null && nv.trim()) {
       options[k][i] = nv.trim();
-      saveOpts(); renderSettings(); render();
+      saveOpts(); renderSettings(); renderPanel();
     }
   }
 });
@@ -258,6 +312,7 @@ document.getElementById("tabM").onclick = () => showTab("manifest");
 document.getElementById("tabD").onclick = () => showTab("daily");
 document.getElementById("tabS").onclick = () => { renderSettings(); showTab("settings"); };
 
+// ===== چک‌لیست روزانه =====
 function renderDaily() {
   document.getElementById("tasks").innerHTML = daily.map((t, i) => `
     <div class="task ${t.done ? "done" : ""}">
