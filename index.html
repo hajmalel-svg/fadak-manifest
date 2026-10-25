@@ -6,7 +6,7 @@
 <title>مانیفست فدک</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: Tahoma, Vazirmatn, sans-serif; background: #f2f4f8; margin: 0; padding: 12px; color: #222; font-size: 14px; }
+  body { font-family: Tahoma, Vazirmatn, sans-serif; background: #f2f4f8; margin: 0; padding: 12px 12px 34px; color: #222; font-size: 14px; }
   h1 { text-align: center; font-size: 19px; margin: 6px 0 12px; }
   .tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap; }
   .tabs button { padding: 8px 14px; border: 0; border-radius: 8px; background: #d9dee8; cursor: pointer; font-family: inherit; }
@@ -44,9 +44,18 @@
   select { padding: 5px; border-radius: 6px; border: 1px solid #bbb; font-family: inherit; font-size: 13px; max-width: 100%; }
   .hidden { display: none !important; }
   .note { font-size: 12px; color: #666; margin: 4px 0 10px; }
+
+  .robot { position: fixed; top: 10px; right: 10px; z-index: 20; width: 44px; height: 44px; border-radius: 50%; background: #2d6cdf; color: #fff; border: 0; font-size: 22px; cursor: pointer; box-shadow: 0 2px 6px #0004; }
+  .bubble { position: fixed; top: 62px; right: 10px; z-index: 20; width: 230px; background: #fff; border: 1px solid #2d6cdf; border-radius: 10px; padding: 10px; font-size: 13px; line-height: 2; box-shadow: 0 2px 8px #0003; }
+  .bubble small { display: block; color: #666; font-size: 11px; margin-bottom: 4px; }
+  .sign { position: fixed; bottom: 6px; left: 8px; z-index: 10; font-size: 11px; color: #777; pointer-events: none; }
 </style>
 </head>
 <body>
+
+<button id="robotBtn" class="robot" title="بیت امروز">🤖</button>
+<div id="bubble" class="bubble hidden"></div>
+<div class="sign">برنامه‌نویسی توسط جناب آقای امیرمحمد اسمعیلی</div>
 
 <h1>مانیفست فدک</h1>
 
@@ -74,7 +83,7 @@
       <label>کسر کوپه<select data-pf="cut"></select></label>
       <label>نفر اضافه<select data-pf="extra"></select></label>
       <label>نیامده<select data-pf="absent"></select></label>
-      <label>/طفل<select data-pf="kids"></select></label>
+      <label>خردسال/طفل<select data-pf="kids"></select></label>
     </div>
   </div>
 
@@ -95,6 +104,18 @@
 </section>
 
 <script>
+// ===== ابیات حافظ (هر روز یک بیت نمایش داده می‌شود) =====
+const HAFEZ = [
+  "الا یا ایها الساقی ادر کاسا و ناولها\nکه عشق آسان نمود اول ولی افتاد مشکل‌ها",
+  "ای دل غم‌دیده حالت به شود دل بد مکن\nوین سر شوریده باز آید به سامان غم مخور",
+  "بیا تا گل برافشانیم و می در ساغر اندازیم\nفلک را سقف بشکافیم و طرحی نو دراندازیم",
+  "مژده ای دل که مسیحا نفسی می‌آید\nکه ز انفاس خوشش بوی کسی می‌آید",
+  "دوش وقت سحر از غصه نجاتم دادند\nو اندر آن ظلمت شب آب حیاتم دادند"
+];
+function hafezOfTheDay() {
+  return HAFEZ[Math.floor(Date.now() / 86400000) % HAFEZ.length];
+}
+
 const DEFAULTS = {
   type:   ["۴خ","۳خ","۲خ","۱خ","۴م","۳م","۲م","۱م","۴ز","۳ز","۲ز","۱ز","۳ز ۱م","۱م ۳ز","۲خ ۲خ","۲خ ۲م","۳خ ۱م","۲ز ۲م"],
   cut:    ["کسر کوپه ۱","کسر کوپه ۲","کسر کوپه ۳"],
@@ -153,8 +174,6 @@ function describe(w, s) {
   return `صندلی ${fa(s)} ـ این صندلی این شخص آمده: ${who}.`;
 }
 
-// متن بزرگ بالای کوپه: از همه صندلی‌های تیک‌خورده ساخته می‌شود
-// هر مقدار تکراری یک بار نوشته می‌شود و ترکیب‌ها (مثل ۳خ ۱م) کنار هم می‌آیند
 function compSummary(w, c) {
   const types = [], cuts = [], extras = [], absents = [], kidsArr = [];
   for (let i = 1; i <= SEATS_PER_COMP; i++) {
@@ -281,6 +300,15 @@ document.getElementById("copyBtn").onclick = async () => {
 document.getElementById("resetBtn").onclick = () => {
   if (confirm("همه اطلاعات ثبت‌شده پاک شود؟")) { data = {}; sel.clear(); save(); render(); }
 };
+
+// ===== ربات حافظ =====
+const bubble = document.getElementById("bubble");
+document.getElementById("robotBtn").onclick = () => {
+  if (!bubble.classList.contains("hidden")) { bubble.classList.add("hidden"); return; }
+  bubble.innerHTML = `<small>بیت امروز از حافظ</small>${esc(hafezOfTheDay()).replace(/\n/g, "<br>")}`;
+  bubble.classList.remove("hidden");
+};
+bubble.classList.add("hidden");
 
 function renderSettings() {
   document.getElementById("optGroups").innerHTML = FIELDS.map(k => `
