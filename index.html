@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>مانیفست فدک</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2d6cdf">
 <style>
   * { box-sizing: border-box; }
   body { font-family: Tahoma, Vazirmatn, sans-serif; background: #f2f4f8; margin: 0; padding: 12px 12px 34px; color: #222; font-size: 14px; }
@@ -84,6 +86,7 @@
       <label>نفر اضافه<select data-pf="extra"></select></label>
       <label>نیامده<select data-pf="absent"></select></label>
       <label>خردسال/طفل<select data-pf="kids"></select></label>
+      <label>بین راه<select data-pf="midway"></select></label>
     </div>
   </div>
 
@@ -104,7 +107,6 @@
 </section>
 
 <script>
-// ===== ابیات حافظ (هر روز یک بیت نمایش داده می‌شود) =====
 const HAFEZ = [
   "الا یا ایها الساقی ادر کاسا و ناولها\nکه عشق آسان نمود اول ولی افتاد مشکل‌ها",
   "ای دل غم‌دیده حالت به شود دل بد مکن\nوین سر شوریده باز آید به سامان غم مخور",
@@ -121,9 +123,10 @@ const DEFAULTS = {
   cut:    ["کسر کوپه ۱","کسر کوپه ۲","کسر کوپه ۳"],
   extra:  ["۱ خردسال","۲ خردسال","۳ خردسال","۴ خردسال","۵ خردسال","۱ طفل","۲ طفل","۳ طفل","۴ طفل","۵ طفل"],
   absent: ["۱م نیامده","۲م نیامده","۳م نیامده","۴م نیامده","۱ز نیامده","۲ز نیامده","۳ز نیامده","۴ز نیامده","۲خ نیامده","۳خ نیامده","۴خ نیامده"],
-  kids:   ["۱ نفر","۲ نفر","۳ نفر","۴ نفر"]
+  kids:   ["۱ نفر","۲ نفر","۳ نفر","۴ نفر"],
+  midway: ["تهران","مشهد","نیشابور","نقاب","شاهرود","سمنان","ورامین","کرج","قزوین","اکبرآباد","رشت","کرمانشاه","سپیددشت","ملایر","زنجان","اردبیل","ساری","قم","اراک","درود","اندیمشک","شوش","اهواز","خرمشهر"]
 };
-const LABELS = { type: "نوع مسافر", cut: "کسر کوپه", extra: "نفر اضافه", absent: "نیامده", kids: "خردسال/طفل در خانواده" };
+const LABELS = { type: "نوع مسافر", cut: "کسر کوپه", extra: "نفر اضافه", absent: "نیامده", kids: "خردسال/طفل در خانواده", midway: "مسافرین بین راه" };
 const FIELDS = Object.keys(LABELS);
 const WAGONS = 11, COMPS = 11, SEATS_PER_COMP = 4;
 const TOTAL_SEATS = COMPS * SEATS_PER_COMP;
@@ -132,11 +135,15 @@ const KEY = "fadak_manifest_v2", DKEY = "fadak_daily_v1", OKEY = "fadak_options_
 let data    = JSON.parse(localStorage.getItem(KEY) || "null") || migrate();
 let daily   = JSON.parse(localStorage.getItem(DKEY) || "[]");
 let options = JSON.parse(localStorage.getItem(OKEY) || "null") || JSON.parse(JSON.stringify(DEFAULTS));
+for (const f of FIELDS) if (!options[f]) options[f] = JSON.parse(JSON.stringify(DEFAULTS[f]));
+// اگر فهرست بین راه قدیمی است، با فهرست شهرها جایگزین شود
+if (!options.midway.includes("تهران")) options.midway = JSON.parse(JSON.stringify(DEFAULTS.midway));
+saveOpts();
 let sel = new Set();
 
 const save      = () => localStorage.setItem(KEY, JSON.stringify(data));
 const saveDaily = () => localStorage.setItem(DKEY, JSON.stringify(daily));
-const saveOpts  = () => localStorage.setItem(OKEY, JSON.stringify(options));
+function saveOpts() { localStorage.setItem(OKEY, JSON.stringify(options)); }
 
 function migrate() {
   const old = JSON.parse(localStorage.getItem("fadak_manifest_v1") || "{}");
@@ -170,12 +177,13 @@ function describe(w, s) {
   if (d.extra)  parts.push(`نفر اضافه: ${d.extra}`);
   if (d.absent) parts.push(d.absent);
   if (d.kids)   parts.push(`در خانواده: ${d.kids}`);
+  if (d.midway) parts.push(`بین راه: ${d.midway}`);
   const who = parts.length ? parts.join("، ") : "اطلاعات خاصی ثبت نشده";
   return `صندلی ${fa(s)} ـ این صندلی این شخص آمده: ${who}.`;
 }
 
 function compSummary(w, c) {
-  const types = [], cuts = [], extras = [], absents = [], kidsArr = [];
+  const types = [], cuts = [], extras = [], absents = [], kidsArr = [], midways = [];
   for (let i = 1; i <= SEATS_PER_COMP; i++) {
     const s = (c - 1) * SEATS_PER_COMP + i;
     const d = data[key(w, s)];
@@ -185,9 +193,10 @@ function compSummary(w, c) {
     if (d.extra)  extras.push(d.extra);
     if (d.absent) absents.push(d.absent);
     if (d.kids)   kidsArr.push(`خانواده: ${d.kids}`);
+    if (d.midway) midways.push(`بین راه: ${d.midway}`);
   }
   const uniq = arr => [...new Set(arr)];
-  const all = [...uniq(types), ...uniq(cuts), ...uniq(extras), ...uniq(absents), ...uniq(kidsArr)];
+  const all = [...uniq(types), ...uniq(cuts), ...uniq(extras), ...uniq(absents), ...uniq(kidsArr), ...uniq(midways)];
   if (!all.length) return "";
   return `مسافرین این کوپه ${all.join(" ، ")} می‌باشد`;
 }
@@ -301,7 +310,6 @@ document.getElementById("resetBtn").onclick = () => {
   if (confirm("همه اطلاعات ثبت‌شده پاک شود؟")) { data = {}; sel.clear(); save(); render(); }
 };
 
-// ===== ربات حافظ =====
 const bubble = document.getElementById("bubble");
 document.getElementById("robotBtn").onclick = () => {
   if (!bubble.classList.contains("hidden")) { bubble.classList.add("hidden"); return; }
@@ -391,6 +399,8 @@ document.getElementById("tasks").addEventListener("click", e => {
 
 render();
 renderDaily();
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 </script>
 </body>
 </html>
