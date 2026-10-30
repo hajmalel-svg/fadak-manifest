@@ -136,7 +136,6 @@ let data    = JSON.parse(localStorage.getItem(KEY) || "null") || migrate();
 let daily   = JSON.parse(localStorage.getItem(DKEY) || "[]");
 let options = JSON.parse(localStorage.getItem(OKEY) || "null") || JSON.parse(JSON.stringify(DEFAULTS));
 for (const f of FIELDS) if (!options[f]) options[f] = JSON.parse(JSON.stringify(DEFAULTS[f]));
-// اگر فهرست بین راه قدیمی است، با فهرست شهرها جایگزین شود
 if (!options.midway.includes("تهران")) options.midway = JSON.parse(JSON.stringify(DEFAULTS.midway));
 saveOpts();
 let sel = new Set();
@@ -182,21 +181,20 @@ function describe(w, s) {
   return `صندلی ${fa(s)} ـ این صندلی این شخص آمده: ${who}.`;
 }
 
+// هر صندلی مقدار خودش را دارد؛ مقادیر تکراری هم به همان تعداد نوشته می‌شوند
 function compSummary(w, c) {
-  const types = [], cuts = [], extras = [], absents = [], kidsArr = [], midways = [];
+  const all = [];
   for (let i = 1; i <= SEATS_PER_COMP; i++) {
     const s = (c - 1) * SEATS_PER_COMP + i;
     const d = data[key(w, s)];
     if (!d || !d.ok) continue;
-    if (d.type)   types.push(d.type);
-    if (d.cut)    cuts.push(d.cut);
-    if (d.extra)  extras.push(d.extra);
-    if (d.absent) absents.push(d.absent);
-    if (d.kids)   kidsArr.push(`خانواده: ${d.kids}`);
-    if (d.midway) midways.push(`بین راه: ${d.midway}`);
+    if (d.type)   all.push(d.type);
+    if (d.cut)    all.push(d.cut);
+    if (d.extra)  all.push(d.extra);
+    if (d.absent) all.push(d.absent);
+    if (d.kids)   all.push(`خانواده: ${d.kids}`);
+    if (d.midway) all.push(`بین راه: ${d.midway}`);
   }
-  const uniq = arr => [...new Set(arr)];
-  const all = [...uniq(types), ...uniq(cuts), ...uniq(extras), ...uniq(absents), ...uniq(kidsArr), ...uniq(midways)];
   if (!all.length) return "";
   return `مسافرین این کوپه ${all.join(" ، ")} می‌باشد`;
 }
