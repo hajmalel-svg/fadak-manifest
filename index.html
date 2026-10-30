@@ -181,20 +181,32 @@ function describe(w, s) {
   return `صندلی ${fa(s)} ـ این صندلی این شخص آمده: ${who}.`;
 }
 
-// هر صندلی مقدار خودش را دارد؛ مقادیر تکراری هم به همان تعداد نوشته می‌شوند
+// نوع مسافر: هر صندلی جدا (مثل ۱م ۱م)
+// کسر کوپه / نفر اضافه / نیامده / خردسال / بین راه: مقادیر یکسان با هم جمع می‌شوند
+// مثلا دو صندلی با «کسر کوپه ۲» → «۲ کسرکوپه ۲»
 function compSummary(w, c) {
-  const all = [];
+  const types = [];
+  const grouped = {}; // برای فیلدهای گروهی: مقدار → تعداد
+  const addGroup = (label, val) => {
+    const k = `${label}:${val}`;
+    grouped[k] = grouped[k] || { label, val, n: 0 };
+    grouped[k].n++;
+  };
   for (let i = 1; i <= SEATS_PER_COMP; i++) {
     const s = (c - 1) * SEATS_PER_COMP + i;
     const d = data[key(w, s)];
     if (!d || !d.ok) continue;
-    if (d.type)   all.push(d.type);
-    if (d.cut)    all.push(d.cut);
-    if (d.extra)  all.push(d.extra);
-    if (d.absent) all.push(d.absent);
-    if (d.kids)   all.push(`خانواده: ${d.kids}`);
-    if (d.midway) all.push(`بین راه: ${d.midway}`);
+    if (d.type) types.push(d.type);
+    if (d.cut) addGroup("cut", d.cut);
+    if (d.extra) addGroup("extra", d.extra);
+    if (d.absent) addGroup("absent", d.absent);
+    if (d.kids) addGroup("kids", `خانواده: ${d.kids}`);
+    if (d.midway) addGroup("midway", `بین راه: ${d.midway}`);
   }
+  const groupText = Object.values(grouped).map(g =>
+    g.n > 1 ? `${g.val} (${fa(g.n)} صندلی)` : g.val
+  );
+  const all = [...types, ...groupText];
   if (!all.length) return "";
   return `مسافرین این کوپه ${all.join(" ، ")} می‌باشد`;
 }
